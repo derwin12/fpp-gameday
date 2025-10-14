@@ -7,3 +7,6 @@ echo ; echo “Please reboot fppd.” ; echo
 . /opt/fpp/scripts/common
 setSetting rebootFlag 1
 popd
+
+. ${FPPDIR}/scripts/common
+${FPPDIR}/scripts/ManageApacheContentPolicy.sh add img-src https://a.espncdn.com
