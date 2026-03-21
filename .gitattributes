@@ -1,0 +1,9 @@
+# Force LF line endings for all text files (required for Makefile and shell scripts on Linux)
+* text=auto eol=lf
+*.php text eol=lf
+*.sh text eol=lf
+Makefile text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
+*.json text eol=lf
+*.inc text eol=lf
