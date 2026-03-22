@@ -1,15 +1,15 @@
 {
-	"repoName": "fpp-nfl",
+	"repoName": "fpp-gameday",
 	"name": "GameDay",
 	"author": "Daryl (derwin12)",
-	"description": "Trigger FPP light sequences when your NFL, NHL, MLB or NCAA team scores or wins — live game tracking via ESPN.",
-	"homeURL": "https://github.com/derwin12/fpp-nfl",
-	"srcURL": "https://github.com/derwin12/fpp-nfl.git",
-	"bugURL": "https://github.com/derwin12/fpp-nfl/issues",
+	"description": "Trigger FPP light sequences when your NFL, NHL, MLB, AFL or NCAA team scores or wins — live game tracking via ESPN.",
+	"homeURL": "https://github.com/derwin12/fpp-gameday",
+	"srcURL": "https://github.com/derwin12/fpp-gameday.git",
+	"bugURL": "https://github.com/derwin12/fpp-gameday/issues",
 	"allowUpdates": 1,
 	"versions": [
 		{
-			"minFPPVersion": "9.0",
+			"minFPPVersion": "8.0",
 			"maxFPPVersion": "0",
 			"branch": "main",
 			"sha": "",
