@@ -85,11 +85,18 @@ async function loadStatus() {
 
             let scoreHtml = '';
             if (gameState === 'in' || gameState === 'post') {
+                const period = ls.gamePeriod || 0;
+                const clock  = ls.gameClock  || '';
+                let periodLabel = '';
+                if (gameState === 'in' && period > 0) {
+                    periodLabel = ` &bull; Period ${period}` + (clock && clock !== '0:00' ? ` &bull; ${clock}` : '');
+                }
                 scoreHtml = `
                 <div class="mt-2">
                   <span class="fs-4 fw-bold">${ls.teamName || ls.teamID} ${ls.myScore ?? 0}</span>
                   <span class="fs-5 text-muted mx-2">vs</span>
                   <span class="fs-4 fw-bold">${oppoName} ${ls.oppoScore ?? 0}</span>
+                  <span class="text-muted small">${periodLabel}</span>
                 </div>`;
             }
 

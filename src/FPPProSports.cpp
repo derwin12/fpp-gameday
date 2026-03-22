@@ -110,6 +110,8 @@ struct LeagueState {
 
     int myScore   = 0;
     int oppoScore = 0;
+    int gamePeriod = 0;
+    std::string gameClock;
 
     // Sequences — football only
     std::string touchdownSequence;
@@ -200,7 +202,8 @@ static bool fetchTeamInfo(const std::string &league, LeagueState &state) {
 
 // Fills status + scores from the live scoreboard. Returns true on success.
 static bool fetchGameStatus(const std::string &league, const LeagueState &state,
-                             std::string &statusOut, int &myScoreOut, int &oppoScoreOut) {
+                             std::string &statusOut, int &myScoreOut, int &oppoScoreOut,
+                             int &periodOut, std::string &clockOut) {
     if (state.nextEventID.empty()) return false;
 
     std::string url = "https://site.api.espn.com/apis/site/v2/sports/"
@@ -214,6 +217,8 @@ static bool fetchGameStatus(const std::string &league, const LeagueState &state,
     if (!parseJson(body, root)) return false;
 
     statusOut    = root["status"]["type"].get("state", "").asString();
+    periodOut    = root["status"].get("period", 0).asInt();
+    clockOut     = root["status"].get("displayClock", "").asString();
     myScoreOut   = 0;
     oppoScoreOut = 0;
 
@@ -450,6 +455,8 @@ private:
             lv["oppoAbbreviation"] = s.oppoAbbreviation;
             lv["myScore"]          = s.myScore;
             lv["oppoScore"]        = s.oppoScore;
+            lv["gamePeriod"]       = s.gamePeriod;
+            lv["gameClock"]        = s.gameClock;
             st["leagues"][lg]      = lv;
         }
         return st;
@@ -626,12 +633,14 @@ private:
                 return 600;
 
             // Within 20 minutes — check if game has started
-            std::string newStatus;
-            int myScore = 0, oppoScore = 0;
-            if (fetchGameStatus(league, ls, newStatus, myScore, oppoScore)) {
-                ls.gameStatus = newStatus;
-                ls.myScore    = myScore;
-                ls.oppoScore  = oppoScore;
+            std::string newStatus, newClock;
+            int myScore = 0, oppoScore = 0, newPeriod = 0;
+            if (fetchGameStatus(league, ls, newStatus, myScore, oppoScore, newPeriod, newClock)) {
+                ls.gameStatus  = newStatus;
+                ls.myScore     = myScore;
+                ls.oppoScore   = oppoScore;
+                ls.gamePeriod  = newPeriod;
+                ls.gameClock   = newClock;
             }
             return 30;
         }
@@ -644,16 +653,18 @@ private:
                 if (ls.nextEventID.empty()) return 600;
             }
 
-            std::string newStatus;
-            int newMy = 0, newOppo = 0;
-            if (!fetchGameStatus(league, ls, newStatus, newMy, newOppo))
+            std::string newStatus, newClock;
+            int newMy = 0, newOppo = 0, newPeriod = 0;
+            if (!fetchGameStatus(league, ls, newStatus, newMy, newOppo, newPeriod, newClock))
                 return 30; // API error — retry soon
 
             int prevMy = ls.myScore;
 
-            ls.gameStatus = newStatus;
-            ls.myScore    = newMy;
-            ls.oppoScore  = newOppo;
+            ls.gameStatus  = newStatus;
+            ls.myScore     = newMy;
+            ls.oppoScore   = newOppo;
+            ls.gamePeriod  = newPeriod;
+            ls.gameClock   = newClock;
 
             // Score change detection (only when game is live or just ended)
             if (newStatus == "in" || newStatus == "post") {
