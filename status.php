@@ -77,51 +77,41 @@ async function loadStatus() {
             if (!ls.teamID) continue;
             anyActive = true;
 
-            const label     = LEAGUE_LABELS[lg] || lg.toUpperCase();
-            const logoHtml  = ls.teamLogo
-                ? `<img src="${ls.teamLogo}" alt="${ls.teamName}" style="height:48px;" class="rounded me-3">`
-                : '';
             const gameState = ls.gameStatus || '';
             const oppoName  = ls.oppoName || '—';
+            const myName    = ls.teamName || ls.teamID;
+            const logoHtml  = ls.teamLogo
+                ? `<img src="${ls.teamLogo}" alt="${myName}" style="height:32px;" class="rounded me-2 flex-shrink-0">`
+                : '';
 
-            let scoreHtml = '';
+            let centerHtml = '';
             if (gameState === 'in' || gameState === 'post') {
                 const period = ls.gamePeriod || 0;
                 const clock  = ls.gameClock  || '';
-                let periodLine = '';
-                if (gameState === 'in' && period > 0) {
-                    const clockStr = (clock && clock !== '0:00') ? ` &mdash; ${clock}` : '';
-                    periodLine = `<div class="text-muted small text-center mt-1">Period ${period}${clockStr}</div>`;
+                let periodStr = '';
+                if (period > 0) {
+                    periodStr = gameState === 'in'
+                        ? `<span class="text-muted small ms-3">P${period}` + (clock && clock !== '0:00' ? ` ${clock}` : '') + `</span>`
+                        : '';
                 }
-                scoreHtml = `
-                <div class="mt-2 text-center">
-                  <span class="fs-4 fw-bold">${ls.teamName || ls.teamID} ${ls.myScore ?? 0}</span>
-                  <span class="fs-5 text-muted mx-3">vs</span>
-                  <span class="fs-4 fw-bold">${oppoName} ${ls.oppoScore ?? 0}</span>
-                  ${periodLine}
-                </div>`;
+                centerHtml = `<span class="fw-bold">${myName} ${ls.myScore ?? 0}</span>
+                  <span class="text-muted mx-2">vs</span>
+                  <span class="fw-bold">${oppoName} ${ls.oppoScore ?? 0}</span>${periodStr}`;
+            } else if (gameState === 'pre') {
+                centerHtml = `<span class="text-muted small">vs ${oppoName} &mdash; ${formatDate(ls.nextEventDate)}</span>`;
+            } else {
+                centerHtml = `<span class="text-muted small">vs ${oppoName}</span>`;
             }
 
             html += `
-<div class="card mb-3">
-  <div class="card-header d-flex align-items-center">
-    ${logoHtml}
-    <div>
-      <strong>${label}</strong><br>
-      <small class="text-muted">${ls.teamName || ls.teamID}</small>
-    </div>
-    <div class="ms-auto">${statusBadge(gameState)}</div>
+<div class="d-flex align-items-center border rounded px-3 py-2 mb-2">
+  ${logoHtml}
+  <div class="me-3 flex-shrink-0" style="min-width:7rem">
+    <div class="fw-semibold lh-sm">${myName}</div>
+    <div class="text-muted" style="font-size:.75rem">${LEAGUE_LABELS[lg] || lg.toUpperCase()}</div>
   </div>
-  <div class="card-body">
-    <dl class="row mb-0">
-      <dt class="col-sm-3">Opponent</dt>
-      <dd class="col-sm-9">${oppoName}</dd>
-
-      <dt class="col-sm-3">Next / Current Game</dt>
-      <dd class="col-sm-9">${formatDate(ls.nextEventDate)}</dd>
-    </dl>
-    ${scoreHtml}
-  </div>
+  <div class="flex-grow-1">${centerHtml}</div>
+  <div class="ms-3 flex-shrink-0">${statusBadge(gameState)}</div>
 </div>`;
             } // end for ls of teams
         }
