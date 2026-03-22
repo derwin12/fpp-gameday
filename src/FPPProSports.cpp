@@ -43,6 +43,7 @@ static std::string fetchURL(const std::string &url) {
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, ""); // auto-decompress gzip/deflate
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "fpp-nfl/2.0");
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
@@ -216,14 +217,18 @@ static bool fetchGameStatus(const std::string &league, const LeagueState &state,
     Json::Value root;
     if (!parseJson(body, root)) return false;
 
-    statusOut    = root["status"]["type"].get("state", "").asString();
-    periodOut    = root["status"].get("period", 0).asInt();
-    clockOut     = root["status"].get("displayClock", "").asString();
     myScoreOut   = 0;
     oppoScoreOut = 0;
 
-    if (root["competitions"].isArray() && !root["competitions"].empty()) {
+    if (!root["competitions"].isArray() || root["competitions"].empty())
+        return false;
+
+    {
         const Json::Value &comp = root["competitions"][0];
+        statusOut = comp["status"]["type"].get("state", "").asString();
+        periodOut = comp["status"].get("period", 0).asInt();
+        clockOut  = comp["status"].get("displayClock", "").asString();
+
         if (comp["competitors"].isArray()) {
             for (const auto &c : comp["competitors"]) {
                 int score = 0;
