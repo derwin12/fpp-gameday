@@ -9,5 +9,7 @@ make "SRCDIR=${SRCDIR}"
 . ${FPPDIR}/scripts/common
 setSetting restartFlag 1
 
-${FPPDIR}/scripts/ManageApacheContentPolicy.sh add img-src https://a.espncdn.com
-${FPPDIR}/scripts/ManageApacheContentPolicy.sh add connect-src https://site.api.espn.com
+if [ -f "${FPPDIR}/scripts/ManageApacheContentPolicy.sh" ]; then
+    ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add img-src https://a.espncdn.com
+    ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add connect-src https://site.api.espn.com
+fi
