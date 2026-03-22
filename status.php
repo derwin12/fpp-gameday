@@ -46,7 +46,7 @@ function formatDate(dateStr) {
 
 function statusBadge(state) {
     const map = {
-        pre:  '<span class="badge bg-info text-dark">PRE</span>',
+        pre:  '<span class="badge bg-info text-dark">UPCOMING</span>',
         in:   '<span class="badge bg-success">LIVE</span>',
         post: '<span class="badge bg-secondary">FINAL</span>'
     };
