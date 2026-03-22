@@ -250,6 +250,54 @@ static bool fetchGameStatus(const std::string &league, const LeagueState &state,
     return !statusOut.empty();
 }
 
+// Scoreboard fallback: find our team's game in the league scoreboard.
+// Used when the team-info endpoint returns an empty nextEvent (e.g. AFL).
+static bool fetchTeamFromScoreboard(const std::string &league, LeagueState &state) {
+    if (state.teamID.empty()) return false;
+
+    std::string url = "https://site.api.espn.com/apis/site/v2/sports/"
+                    + espnSport(league) + "/" + espnLeague(league) + "/scoreboard";
+    std::string body = fetchURL(url);
+    if (body.empty()) return false;
+
+    Json::Value root;
+    if (!parseJson(body, root)) return false;
+
+    const Json::Value &events = root["events"];
+    if (!events.isArray()) return false;
+
+    for (const auto &ev : events) {
+        if (!ev["competitions"].isArray() || ev["competitions"].empty()) continue;
+        const Json::Value &comp = ev["competitions"][0];
+        if (!comp["competitors"].isArray()) continue;
+
+        bool found = false;
+        for (const auto &c : comp["competitors"])
+            if (c["team"].get("id", "").asString() == state.teamID) { found = true; break; }
+        if (!found) continue;
+
+        state.nextEventID   = ev.get("id", "").asString();
+        state.nextEventDate = ev.get("date", "").asString();
+        state.gameStatus    = comp["status"]["type"].get("state", "").asString();
+
+        for (const auto &c : comp["competitors"]) {
+            std::string cid = c["team"].get("id", "").asString();
+            if (cid == state.teamID) {
+                try { state.myScore = std::stoi(c.get("score", "0").asString()); } catch (...) {}
+            } else {
+                state.oppoID           = cid;
+                state.oppoName         = c["team"].get("displayName", "").asString();
+                state.oppoAbbreviation = c["team"].get("abbreviation", "").asString();
+                try { state.oppoScore = std::stoi(c.get("score", "0").asString()); } catch (...) {}
+            }
+        }
+        LogInfo(VB_PLUGIN, "fpp-nfl: [%s] found via scoreboard fallback: event=%s status=%s\n",
+                league.c_str(), state.nextEventID.c_str(), state.gameStatus.c_str());
+        return true;
+    }
+    return false;
+}
+
 // Trigger a sequence via FPP's local REST API
 static void triggerSequence(const std::string &seq) {
     if (seq.empty()) return;
@@ -673,6 +721,8 @@ private:
             // If we have no event yet, fetch team info first
             if (ls.nextEventID.empty()) {
                 fetchTeamInfo(league, ls);
+                if (ls.nextEventID.empty())
+                    fetchTeamFromScoreboard(league, ls);
                 if (ls.nextEventID.empty()) return 600;
             }
 
