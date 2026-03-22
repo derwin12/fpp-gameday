@@ -79,11 +79,8 @@ $sequences = getSequences();
 <h2 class="mb-4">GameDay</h2>
 
 <div class="mb-3 d-flex align-items-center gap-3">
-  <div class="form-check form-switch">
-    <input class="form-check-input" type="checkbox" id="enabled" onchange="saveConfig()">
-    <label class="form-check-label" for="enabled">Enable Plugin</label>
-  </div>
-  <button class="btn btn-primary btn-sm" onclick="saveConfig()">Save Settings</button>
+  <label for="enabled">Enable Plugin:&nbsp;<input type="checkbox" id="enabled" class="enableCheckbox"></label>
+  <input type="button" class="buttons" value="Save Settings" onclick="saveConfig()">
   <span id="save-status" class="text-muted small"></span>
 </div>
 
