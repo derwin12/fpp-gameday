@@ -316,7 +316,7 @@ public:
 
         if (action == "config") {
             Json::Value cfg;
-            if (!parseJson(req.get_content(), cfg))
+            if (!parseJson(std::string(req.get_content()), cfg))
                 return errResp(400, "Invalid JSON");
 
             bool wasEnabled = m_enabled.load();
@@ -332,7 +332,7 @@ public:
             else
                 m_cv.notify_all();
 
-            return jsonResp("{\"status\":\"ok\"}");
+            return jsonResp(std::string("{\"status\":\"ok\"}"));
         }
 
         if (action == "refresh" && pieces.size() > 2) {
