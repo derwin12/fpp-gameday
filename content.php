@@ -1,6 +1,6 @@
 <?php
 /*
- * fpp-nfl - Pro Sports Scoring Plugin
+ * fpp-gameday - Pro Sports Scoring Plugin
  * Settings / configuration page
  */
 
@@ -9,7 +9,7 @@ function fetchJson($url) {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-    curl_setopt($ch, CURLOPT_USERAGENT, 'fpp-nfl/1.0');
+    curl_setopt($ch, CURLOPT_USERAGENT, 'fpp-gameday/1.0');
     $body = curl_exec($ch);
     $err  = curl_error($ch);
     curl_close($ch);

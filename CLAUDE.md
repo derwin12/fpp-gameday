@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**GameDay** (`fpp-nfl`) is a [Falcon Pi Player (FPP)](https://github.com/FalconChristmas/fpp) plugin that monitors live sports scores via the ESPN API and triggers FPP light sequences when a tracked team scores or wins. Supports NFL, NCAA Football, NHL, and MLB. Multiple teams per league are supported.
+**GameDay** (`fpp-gameday`) is a [Falcon Pi Player (FPP)](https://github.com/FalconChristmas/fpp) plugin that monitors live sports scores via the ESPN API and triggers FPP light sequences when a tracked team scores or wins. Supports NFL, NCAA Football, NHL, and MLB. Multiple teams per league are supported.
 
-- Repo: `https://github.com/derwin12/fpp-nfl`
-- FPP install path: `/home/fpp/media/plugins/fpp-nfl/`
+- Repo: `https://github.com/derwin12/fpp-gameday`
+- FPP install path: `/home/fpp/media/plugins/fpp-gameday/`
 - FPP version requirement: 9.0+
 
 ## Architecture
 
-The plugin is a **C++ shared library** compiled to `libfpp-nfl.so` and loaded automatically by `fppd` at startup.
+The plugin is a **C++ shared library** compiled to `libfpp-gameday.so` and loaded automatically by `fppd` at startup.
 
 **C++ plugin** (`src/FPPProSports.cpp`)
 - Class `FPPProSportsPlugin` inherits `FPPPlugins::Plugin`, `FPPPlugins::APIProviderPlugin`, `httpserver::http_resource`
@@ -23,7 +23,7 @@ The plugin is a **C++ shared library** compiled to `libfpp-nfl.so` and loaded au
 - Score detection: football delta ≥6 → touchdown, <6 → field goal; hockey/baseball: any positive delta
 - Win detection: game goes to "post" and myScore > oppoScore
 - Sequence triggering: `POST http://127.0.0.1/api/command/Insert%20Playlist%20Immediate/{seq}.fseq/0/0`
-- Config persisted to `FPP_DIR_CONFIG("/plugin.fpp-nfl.json")` (JSON, array per league)
+- Config persisted to `FPP_DIR_CONFIG("/plugin.fpp-gameday.json")` (JSON, array per league)
 
 **FPP web UI** (PHP, served by FPP's Apache)
 - `content.php` — Settings page: tabs per league, dynamic add/remove team rows, JS populates from C++ config API, saves as JSON arrays. Do NOT load Bootstrap — FPP already provides it.
@@ -33,8 +33,8 @@ The plugin is a **C++ shared library** compiled to `libfpp-nfl.so` and loaded au
 ## Build
 
 ```bash
-cd /home/fpp/media/plugins/fpp-nfl
-make SRCDIR=/opt/fpp/src       # produces libfpp-nfl.so
+cd /home/fpp/media/plugins/fpp-gameday
+make SRCDIR=/opt/fpp/src       # produces libfpp-gameday.so
 sudo systemctl restart fppd    # reload plugin
 ```
 

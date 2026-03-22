@@ -1,5 +1,5 @@
 #!/bin/bash
-# fpp-nfl uninstall script
+# fpp-gameday uninstall script
 
 . ${FPPDIR}/scripts/common
 ${FPPDIR}/scripts/ManageApacheContentPolicy.sh remove img-src https://a.espncdn.com

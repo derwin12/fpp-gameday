@@ -4,12 +4,14 @@
       <div style="overflow: hidden; padding: 10px;">
         <div>
           <div id='credits'>
-            <b>Template Plugin Developed By:</b><br />
-		        <br />
-            Ben Kools (koolsb)<br />
-		        <br />
-            <a href='https://github.com/koolsb/fpp-nfl'>Git Repository</a><br>
-		        <br />
+            <b>Originally Developed By:</b><br />
+            <br />
+            Ben Kools (koolsb) &mdash; <a href='https://github.com/koolsb/fpp-nfl'>koolsb/fpp-nfl</a><br />
+            <br />
+            <b>Forked and Extended By:</b><br />
+            <br />
+            Daryl (derwin12) &mdash; <a href='https://github.com/derwin12/fpp-gameday'>derwin12/fpp-gameday</a><br />
+            <br />
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 #!/bin/bash
-# fpp-nfl install script
+# fpp-gameday install script
 
 BASEDIR=$(dirname $0)
 cd $BASEDIR

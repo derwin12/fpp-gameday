@@ -1,5 +1,5 @@
 #!/bin/sh
-echo "Running fpp-nfl PreStart Script"
+echo "Running fpp-gameday PreStart Script"
 BASEDIR=$(dirname $0)
 cd $BASEDIR
 cd ..

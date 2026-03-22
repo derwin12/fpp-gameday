@@ -1,4 +1,4 @@
 #!/bin/sh
-# fpp-nfl is a C++ plugin loaded automatically as a shared library.
+# fpp-gameday is a C++ plugin loaded automatically as a shared library.
 # No separate process needed.
-echo "fpp-nfl C++ plugin loaded."
+echo "fpp-gameday C++ plugin loaded."

@@ -1,6 +1,6 @@
 <?php
 /*
- * fpp-nfl - Pro Sports Scoring Plugin
+ * fpp-gameday - Pro Sports Scoring Plugin
  * Live status page - static HTML, data loaded via JS from C++ API
  */
 ?>
@@ -60,7 +60,7 @@ async function loadStatus() {
     try {
         const resp = await fetch('/api/plugin-apis/ProSportsScoring/status');
         if (!resp.ok) {
-            container.innerHTML = '<div class="alert alert-danger">Could not reach plugin API (status ' + resp.status + '). Is fpp-nfl installed and FPP running?</div>';
+            container.innerHTML = '<div class="alert alert-danger">Could not reach plugin API (status ' + resp.status + '). Is fpp-gameday installed and FPP running?</div>';
             return;
         }
         const data = await resp.json();

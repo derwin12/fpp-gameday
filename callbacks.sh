@@ -1,7 +1,7 @@
 #!/bin/bash
 #############################################################################
-# fpp-nfl callbacks.sh
-# Declares this as a C++ plugin so FPP loads libfpp-nfl.so directly.
+# fpp-gameday callbacks.sh
+# Declares this as a C++ plugin so FPP loads libfpp-gameday.so directly.
 #############################################################################
 
 while [ -n "$1" ]; do

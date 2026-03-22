@@ -1,5 +1,5 @@
 /*
- * fpp-nfl - Pro Sports Scoring Plugin for Falcon Player (FPP)
+ * fpp-gameday - Pro Sports Scoring Plugin for Falcon Player (FPP)
  * C++ plugin: polls ESPN API, triggers FPP sequences on scores/wins.
  */
 
@@ -44,11 +44,11 @@ static std::string fetchURL(const std::string &url) {
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, ""); // auto-decompress gzip/deflate
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "fpp-nfl/2.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "fpp-gameday/2.0");
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
     if (res != CURLE_OK) {
-        LogWarn(VB_PLUGIN, "fpp-nfl: fetchURL failed for %s: %s\n",
+        LogWarn(VB_PLUGIN, "fpp-gameday: fetchURL failed for %s: %s\n",
                 url.c_str(), curl_easy_strerror(res));
         return "";
     }
@@ -199,7 +199,7 @@ static bool fetchTeamInfo(const std::string &league, LeagueState &state) {
         }
     }
 
-    LogInfo(VB_PLUGIN, "fpp-nfl: [%s] team=%s nextGame=%s status=%s\n",
+    LogInfo(VB_PLUGIN, "fpp-gameday: [%s] team=%s nextGame=%s status=%s\n",
             league.c_str(), state.teamName.c_str(),
             state.nextEventDate.c_str(), state.gameStatus.c_str());
     return true;
@@ -291,7 +291,7 @@ static bool fetchTeamFromScoreboard(const std::string &league, LeagueState &stat
                 try { state.oppoScore = std::stoi(c.get("score", "0").asString()); } catch (...) {}
             }
         }
-        LogInfo(VB_PLUGIN, "fpp-nfl: [%s] found via scoreboard fallback: event=%s status=%s\n",
+        LogInfo(VB_PLUGIN, "fpp-gameday: [%s] found via scoreboard fallback: event=%s status=%s\n",
                 league.c_str(), state.nextEventID.c_str(), state.gameStatus.c_str());
         return true;
     }
@@ -303,7 +303,7 @@ static void triggerSequence(const std::string &seq) {
     if (seq.empty()) return;
     std::string url = "http://127.0.0.1/api/command/Insert%20Playlist%20Immediate/"
                     + curlEscape(seq + ".fseq") + "/0/0";
-    LogInfo(VB_PLUGIN, "fpp-nfl: triggering sequence: %s\n", seq.c_str());
+    LogInfo(VB_PLUGIN, "fpp-gameday: triggering sequence: %s\n", seq.c_str());
     fetchURL(url);
 }
 
@@ -318,7 +318,7 @@ class FPPProSportsPlugin : public FPPPlugins::Plugin,
                            public httpserver::http_resource {
 public:
     FPPProSportsPlugin()
-        : FPPPlugins::Plugin("fpp-nfl"),
+        : FPPPlugins::Plugin("fpp-gameday"),
           FPPPlugins::APIProviderPlugin(),
           m_running(false),
           m_enabled(false),
@@ -441,29 +441,29 @@ private:
     // -------------------------------------------------------------------
 
     void loadConfig() {
-        std::string path = FPP_DIR_CONFIG("/plugin.fpp-nfl.json");
+        std::string path = FPP_DIR_CONFIG("/plugin.fpp-gameday.json");
         if (!FileExists(path)) {
-            LogInfo(VB_PLUGIN, "fpp-nfl: no config at %s, using defaults\n", path.c_str());
+            LogInfo(VB_PLUGIN, "fpp-gameday: no config at %s, using defaults\n", path.c_str());
             return;
         }
         Json::Value cfg;
         if (!LoadJsonFromFile(path, cfg)) {
-            LogWarn(VB_PLUGIN, "fpp-nfl: failed to parse config %s\n", path.c_str());
+            LogWarn(VB_PLUGIN, "fpp-gameday: failed to parse config %s\n", path.c_str());
             return;
         }
         applyConfig(cfg);
-        LogInfo(VB_PLUGIN, "fpp-nfl: config loaded\n");
+        LogInfo(VB_PLUGIN, "fpp-gameday: config loaded\n");
     }
 
     void saveConfig() {
-        std::string path = FPP_DIR_CONFIG("/plugin.fpp-nfl.json");
+        std::string path = FPP_DIR_CONFIG("/plugin.fpp-gameday.json");
         Json::Value cfg;
         {
             std::lock_guard<std::mutex> lock(m_stateMutex);
             cfg = buildConfigJson();
         }
         if (!SaveJsonToFile(cfg, path))
-            LogWarn(VB_PLUGIN, "fpp-nfl: failed to save config to %s\n", path.c_str());
+            LogWarn(VB_PLUGIN, "fpp-gameday: failed to save config to %s\n", path.c_str());
     }
 
     // Must be called with m_stateMutex held
@@ -601,7 +601,7 @@ private:
     void startThread() {
         if (m_running.exchange(true)) return; // already running
         m_thread = std::thread(&FPPProSportsPlugin::pollLoop, this);
-        LogInfo(VB_PLUGIN, "fpp-nfl: polling thread started\n");
+        LogInfo(VB_PLUGIN, "fpp-gameday: polling thread started\n");
     }
 
     // Safe to call from any thread; does NOT hold m_stateMutex.
@@ -610,7 +610,7 @@ private:
         m_cv.notify_all();
         if (m_thread.joinable())
             m_thread.join();
-        LogInfo(VB_PLUGIN, "fpp-nfl: polling thread stopped\n");
+        LogInfo(VB_PLUGIN, "fpp-gameday: polling thread stopped\n");
     }
 
     // -------------------------------------------------------------------
@@ -618,7 +618,7 @@ private:
     // -------------------------------------------------------------------
 
     void pollLoop() {
-        LogInfo(VB_PLUGIN, "fpp-nfl: pollLoop starting\n");
+        LogInfo(VB_PLUGIN, "fpp-gameday: pollLoop starting\n");
 
         while (m_running.load()) {
             if (!m_enabled.load()) {
@@ -678,14 +678,14 @@ private:
             }
         }
 
-        LogInfo(VB_PLUGIN, "fpp-nfl: pollLoop exiting\n");
+        LogInfo(VB_PLUGIN, "fpp-gameday: pollLoop exiting\n");
     }
 
     // Polls one league. Returns recommended sleep time in seconds.
     // ls is a local copy — modify freely; caller writes back under lock.
     int pollLeague(const std::string &league, LeagueState &ls) {
         if (m_logLevel >= 5)
-            LogDebug(VB_PLUGIN, "fpp-nfl: [%s] polling, status=%s\n",
+            LogDebug(VB_PLUGIN, "fpp-gameday: [%s] polling, status=%s\n",
                      league.c_str(), ls.gameStatus.c_str());
 
         // POST-game: look for the next game
@@ -743,7 +743,7 @@ private:
             if (newStatus == "in" || newStatus == "post") {
                 int delta = newMy - prevMy;
                 if (delta > 0) {
-                    LogInfo(VB_PLUGIN, "fpp-nfl: [%s] score! my=%d (was %d) oppo=%d\n",
+                    LogInfo(VB_PLUGIN, "fpp-gameday: [%s] score! my=%d (was %d) oppo=%d\n",
                             league.c_str(), newMy, prevMy, newOppo);
                     if (isFootball(league)) {
                         triggerSequence(delta >= 6 ? ls.touchdownSequence
@@ -757,7 +757,7 @@ private:
             // Win detection when game ends
             if (newStatus == "post") {
                 if (newMy > newOppo) {
-                    LogInfo(VB_PLUGIN, "fpp-nfl: [%s] WIN! my=%d oppo=%d\n",
+                    LogInfo(VB_PLUGIN, "fpp-gameday: [%s] WIN! my=%d oppo=%d\n",
                             league.c_str(), newMy, newOppo);
                     triggerSequence(ls.winSequence);
                 }
