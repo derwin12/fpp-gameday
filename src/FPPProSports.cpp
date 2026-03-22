@@ -432,10 +432,14 @@ public:
                 std::lock_guard<std::mutex> lock(m_stateMutex);
                 auto &teams = m_leagues[league];
                 if (idx < teams.size() && teams[idx].teamID == copy.teamID) {
-                    copy.winSequence       = teams[idx].winSequence;
-                    copy.touchdownSequence = teams[idx].touchdownSequence;
-                    copy.fieldgoalSequence = teams[idx].fieldgoalSequence;
-                    copy.scoreSequence     = teams[idx].scoreSequence;
+                    copy.winActionType        = teams[idx].winActionType;
+                    copy.winActionValue       = teams[idx].winActionValue;
+                    copy.touchdownActionType  = teams[idx].touchdownActionType;
+                    copy.touchdownActionValue = teams[idx].touchdownActionValue;
+                    copy.fieldgoalActionType  = teams[idx].fieldgoalActionType;
+                    copy.fieldgoalActionValue = teams[idx].fieldgoalActionValue;
+                    copy.scoreActionType      = teams[idx].scoreActionType;
+                    copy.scoreActionValue     = teams[idx].scoreActionValue;
                     copy.myScore   = 0;
                     copy.oppoScore = 0;
                     teams[idx] = copy;
