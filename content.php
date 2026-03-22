@@ -59,6 +59,23 @@ function getSequences() {
     return array_values(array_map(fn($s) => preg_replace('/\.fseq$/i', '', $s), $seqs));
 }
 
+function getPlaylists() {
+    $data = fetchJson('http://127.0.0.1/api/playlists');
+    if (!$data || !is_array($data)) return [];
+    sort($data);
+    return $data;
+}
+
+function getAudio() {
+    $data = fetchJson('http://127.0.0.1/api/media');
+    if (!$data || !is_array($data)) return [];
+    sort($data);
+    return $data;
+}
+
+$playlists = getPlaylists();
+$audio     = getAudio();
+
 $teamsData = [
     'nfl'  => getTeams('football', 'nfl'),
     'ncaa' => getNCAATeams(),
@@ -128,6 +145,8 @@ $sequences = getSequences();
 <script>
 const TEAMS_DATA = <?= json_encode($teamsData) ?>;
 const SEQUENCES  = <?= json_encode($sequences) ?>;
+const PLAYLISTS  = <?= json_encode($playlists) ?>;
+const AUDIO      = <?= json_encode($audio) ?>;
 const LEAGUES    = ['nfl', 'ncaa', 'nhl', 'mlb', 'afl'];
 const LEAGUE_LABELS = { nfl: 'NFL Football', ncaa: 'NCAA Football', nhl: 'NHL Hockey', mlb: 'MLB Baseball', afl: 'AFL' };
 
@@ -143,16 +162,42 @@ function buildTeamSelect(lg, selectedID) {
     return sel;
 }
 
-function buildSeqSelect(selectedVal, cls) {
-    const sel = document.createElement('select');
-    sel.className = 'form-select ' + (cls || '');
-    sel.appendChild(new Option('-- None --', ''));
-    for (const s of SEQUENCES) {
-        const opt = new Option(s, s);
-        if (s === selectedVal) opt.selected = true;
-        sel.appendChild(opt);
+const ACTION_LISTS = { sequence: SEQUENCES, playlist: PLAYLISTS, audio: AUDIO };
+
+function buildActionSelects(typeVal, valueVal, typeClass, valueClass) {
+    const wrap = document.createElement('div');
+    wrap.className = 'd-flex gap-2';
+
+    const typeSel = document.createElement('select');
+    typeSel.className = 'form-select form-select-sm ' + (typeClass || '');
+    typeSel.style.maxWidth = '110px';
+    for (const [v, l] of [['', 'None'], ['sequence', 'Sequence'], ['playlist', 'Playlist'], ['audio', 'Audio']]) {
+        const o = new Option(l, v);
+        if (v === typeVal) o.selected = true;
+        typeSel.appendChild(o);
     }
-    return sel;
+
+    const valueSel = document.createElement('select');
+    valueSel.className = 'form-select form-select-sm ' + (valueClass || '');
+
+    function populateValues() {
+        const t = typeSel.value;
+        valueSel.innerHTML = '';
+        valueSel.disabled = !t;
+        if (!t) { valueSel.appendChild(new Option('—', '')); return; }
+        valueSel.appendChild(new Option('-- None --', ''));
+        for (const s of (ACTION_LISTS[t] || [])) {
+            const o = new Option(s, s);
+            if (s === valueVal) o.selected = true;
+            valueSel.appendChild(o);
+        }
+    }
+
+    typeSel.onchange = () => { valueVal = ''; populateValues(); };
+    populateValues();
+
+    wrap.append(typeSel, valueSel);
+    return wrap;
 }
 
 function addTeamRow(lg, data) {
@@ -223,38 +268,27 @@ function addTeamRow(lg, data) {
     const seqRow = document.createElement('div');
     seqRow.className = 'row g-3';
 
-    const winCol = document.createElement('div');
-    winCol.className = 'col-md-6';
-    const winLabel = document.createElement('label');
-    winLabel.className = 'form-label';
-    winLabel.textContent = 'Win Sequence';
-    winCol.append(winLabel, buildSeqSelect(data.winSequence || '', 'win-seq'));
-    seqRow.append(winCol);
+    function actionCol(label, typeClass, valueClass, typeVal, valueVal) {
+        const col = document.createElement('div');
+        col.className = 'col-md-6';
+        const lbl = document.createElement('label');
+        lbl.className = 'form-label';
+        lbl.textContent = label;
+        col.append(lbl, buildActionSelects(typeVal, valueVal, typeClass, valueClass));
+        return col;
+    }
+
+    seqRow.append(actionCol('Win', 'win-type', 'win-val',
+        data.winActionType || '', data.winActionValue || ''));
 
     if (isFootball) {
-        const tdCol = document.createElement('div');
-        tdCol.className = 'col-md-6';
-        const tdLabel = document.createElement('label');
-        tdLabel.className = 'form-label';
-        tdLabel.textContent = 'Touchdown Sequence';
-        tdCol.append(tdLabel, buildSeqSelect(data.touchdownSequence || '', 'td-seq'));
-        seqRow.append(tdCol);
-
-        const fgCol = document.createElement('div');
-        fgCol.className = 'col-md-6';
-        const fgLabel = document.createElement('label');
-        fgLabel.className = 'form-label';
-        fgLabel.textContent = 'Field Goal Sequence';
-        fgCol.append(fgLabel, buildSeqSelect(data.fieldgoalSequence || '', 'fg-seq'));
-        seqRow.append(fgCol);
+        seqRow.append(actionCol('Touchdown', 'td-type', 'td-val',
+            data.touchdownActionType || '', data.touchdownActionValue || ''));
+        seqRow.append(actionCol('Field Goal', 'fg-type', 'fg-val',
+            data.fieldgoalActionType || '', data.fieldgoalActionValue || ''));
     } else {
-        const scoreCol = document.createElement('div');
-        scoreCol.className = 'col-md-6';
-        const scoreLabel = document.createElement('label');
-        scoreLabel.className = 'form-label';
-        scoreLabel.textContent = 'Score Sequence';
-        scoreCol.append(scoreLabel, buildSeqSelect(data.scoreSequence || '', 'score-seq'));
-        seqRow.append(scoreCol);
+        seqRow.append(actionCol('Score', 'score-type', 'score-val',
+            data.scoreActionType || '', data.scoreActionValue || ''));
     }
 
     body.append(teamRow, seqRow);
@@ -302,14 +336,18 @@ function buildConfigPayload() {
         const teams = [];
         for (const card of document.getElementById('teams-' + lg).children) {
             const t = {
-                teamID:      (card.querySelector('.team-select') || {}).value || '',
-                winSequence: (card.querySelector('.win-seq')     || {}).value || ''
+                teamID:         (card.querySelector('.team-select') || {}).value || '',
+                winActionType:  (card.querySelector('.win-type')    || {}).value || '',
+                winActionValue: (card.querySelector('.win-val')     || {}).value || ''
             };
             if (isFootball) {
-                t.touchdownSequence = (card.querySelector('.td-seq') || {}).value || '';
-                t.fieldgoalSequence = (card.querySelector('.fg-seq') || {}).value || '';
+                t.touchdownActionType  = (card.querySelector('.td-type')  || {}).value || '';
+                t.touchdownActionValue = (card.querySelector('.td-val')   || {}).value || '';
+                t.fieldgoalActionType  = (card.querySelector('.fg-type')  || {}).value || '';
+                t.fieldgoalActionValue = (card.querySelector('.fg-val')   || {}).value || '';
             } else {
-                t.scoreSequence = (card.querySelector('.score-seq') || {}).value || '';
+                t.scoreActionType  = (card.querySelector('.score-type') || {}).value || '';
+                t.scoreActionValue = (card.querySelector('.score-val')  || {}).value || '';
             }
             teams.push(t);
         }

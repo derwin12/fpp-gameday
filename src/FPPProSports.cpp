@@ -114,13 +114,15 @@ struct LeagueState {
     int gamePeriod = 0;
     std::string gameClock;
 
-    // Sequences — football only
-    std::string touchdownSequence;
-    std::string fieldgoalSequence;
-    // Sequences — hockey/baseball only
-    std::string scoreSequence;
-    // All sports
-    std::string winSequence;
+    // Actions — type: "sequence"|"playlist"|"audio"|"" (none), value: name
+    std::string winActionType;
+    std::string winActionValue;
+    std::string touchdownActionType;   // football only
+    std::string touchdownActionValue;
+    std::string fieldgoalActionType;   // football only
+    std::string fieldgoalActionValue;
+    std::string scoreActionType;       // non-football
+    std::string scoreActionValue;
 };
 
 static bool isFootball(const std::string &league) {
@@ -298,12 +300,23 @@ static bool fetchTeamFromScoreboard(const std::string &league, LeagueState &stat
     return false;
 }
 
-// Trigger a sequence via FPP's local REST API
-static void triggerSequence(const std::string &seq) {
-    if (seq.empty()) return;
-    std::string url = "http://127.0.0.1/api/command/Insert%20Playlist%20Immediate/"
-                    + curlEscape(seq + ".fseq") + "/0/0";
-    LogInfo(VB_PLUGIN, "fpp-gameday: triggering sequence: %s\n", seq.c_str());
+// Trigger an action (sequence, playlist, or audio) via FPP's local REST API
+static void triggerAction(const std::string &type, const std::string &value) {
+    if (type.empty() || type == "none" || value.empty()) return;
+    std::string url;
+    if (type == "sequence") {
+        url = "http://127.0.0.1/api/command/Insert%20Playlist%20Immediate/"
+            + curlEscape(value + ".fseq") + "/0/0";
+    } else if (type == "playlist") {
+        url = "http://127.0.0.1/api/command/Insert%20Playlist%20Immediate/"
+            + curlEscape(value) + "/0/0";
+    } else if (type == "audio") {
+        url = "http://127.0.0.1/api/command/Play%20Media/"
+            + curlEscape(value) + "/1/0";
+    } else {
+        return;
+    }
+    LogInfo(VB_PLUGIN, "fpp-gameday: triggering %s: %s\n", type.c_str(), value.c_str());
     fetchURL(url);
 }
 
@@ -491,10 +504,14 @@ private:
                 lv["oppoAbbreviation"]  = s.oppoAbbreviation;
                 lv["myScore"]           = s.myScore;
                 lv["oppoScore"]         = s.oppoScore;
-                lv["winSequence"]       = s.winSequence;
-                lv["touchdownSequence"] = s.touchdownSequence;
-                lv["fieldgoalSequence"] = s.fieldgoalSequence;
-                lv["scoreSequence"]     = s.scoreSequence;
+                lv["winActionType"]          = s.winActionType;
+                lv["winActionValue"]         = s.winActionValue;
+                lv["touchdownActionType"]    = s.touchdownActionType;
+                lv["touchdownActionValue"]   = s.touchdownActionValue;
+                lv["fieldgoalActionType"]    = s.fieldgoalActionType;
+                lv["fieldgoalActionValue"]   = s.fieldgoalActionValue;
+                lv["scoreActionType"]        = s.scoreActionType;
+                lv["scoreActionValue"]       = s.scoreActionValue;
                 arr.append(lv);
             }
             cfg["leagues"][lg] = arr;
@@ -568,10 +585,28 @@ private:
                 if (lv.isMember("oppoAbbreviation"))  s.oppoAbbreviation  = lv["oppoAbbreviation"].asString();
                 if (lv.isMember("myScore"))           s.myScore           = lv["myScore"].asInt();
                 if (lv.isMember("oppoScore"))         s.oppoScore         = lv["oppoScore"].asInt();
-                if (lv.isMember("winSequence"))       s.winSequence       = lv["winSequence"].asString();
-                if (lv.isMember("touchdownSequence")) s.touchdownSequence = lv["touchdownSequence"].asString();
-                if (lv.isMember("fieldgoalSequence")) s.fieldgoalSequence = lv["fieldgoalSequence"].asString();
-                if (lv.isMember("scoreSequence"))     s.scoreSequence     = lv["scoreSequence"].asString();
+                // New action fields
+                if (lv.isMember("winActionType"))        s.winActionType        = lv["winActionType"].asString();
+                if (lv.isMember("winActionValue"))       s.winActionValue       = lv["winActionValue"].asString();
+                if (lv.isMember("touchdownActionType"))  s.touchdownActionType  = lv["touchdownActionType"].asString();
+                if (lv.isMember("touchdownActionValue")) s.touchdownActionValue = lv["touchdownActionValue"].asString();
+                if (lv.isMember("fieldgoalActionType"))  s.fieldgoalActionType  = lv["fieldgoalActionType"].asString();
+                if (lv.isMember("fieldgoalActionValue")) s.fieldgoalActionValue = lv["fieldgoalActionValue"].asString();
+                if (lv.isMember("scoreActionType"))      s.scoreActionType      = lv["scoreActionType"].asString();
+                if (lv.isMember("scoreActionValue"))     s.scoreActionValue     = lv["scoreActionValue"].asString();
+                // Backwards compat: migrate old *Sequence string fields
+                if (s.winActionType.empty() && lv.isMember("winSequence") && !lv["winSequence"].asString().empty()) {
+                    s.winActionType = "sequence"; s.winActionValue = lv["winSequence"].asString();
+                }
+                if (s.touchdownActionType.empty() && lv.isMember("touchdownSequence") && !lv["touchdownSequence"].asString().empty()) {
+                    s.touchdownActionType = "sequence"; s.touchdownActionValue = lv["touchdownSequence"].asString();
+                }
+                if (s.fieldgoalActionType.empty() && lv.isMember("fieldgoalSequence") && !lv["fieldgoalSequence"].asString().empty()) {
+                    s.fieldgoalActionType = "sequence"; s.fieldgoalActionValue = lv["fieldgoalSequence"].asString();
+                }
+                if (s.scoreActionType.empty() && lv.isMember("scoreSequence") && !lv["scoreSequence"].asString().empty()) {
+                    s.scoreActionType = "sequence"; s.scoreActionValue = lv["scoreSequence"].asString();
+                }
                 newTeams.push_back(std::move(s));
             }
 
@@ -658,10 +693,14 @@ private:
                         std::lock_guard<std::mutex> lock(m_stateMutex);
                         for (auto &mt : m_leagues[lg]) {
                             if (mt.teamID == ls.teamID) {
-                                ls.winSequence       = mt.winSequence;
-                                ls.touchdownSequence = mt.touchdownSequence;
-                                ls.fieldgoalSequence = mt.fieldgoalSequence;
-                                ls.scoreSequence     = mt.scoreSequence;
+                                ls.winActionType        = mt.winActionType;
+                                ls.winActionValue       = mt.winActionValue;
+                                ls.touchdownActionType  = mt.touchdownActionType;
+                                ls.touchdownActionValue = mt.touchdownActionValue;
+                                ls.fieldgoalActionType  = mt.fieldgoalActionType;
+                                ls.fieldgoalActionValue = mt.fieldgoalActionValue;
+                                ls.scoreActionType      = mt.scoreActionType;
+                                ls.scoreActionValue     = mt.scoreActionValue;
                                 mt = ls;
                                 break;
                             }
@@ -750,10 +789,12 @@ private:
                     LogInfo(VB_PLUGIN, "fpp-gameday: [%s] score! my=%d (was %d) oppo=%d\n",
                             league.c_str(), newMy, prevMy, newOppo);
                     if (isFootball(league)) {
-                        triggerSequence(delta >= 6 ? ls.touchdownSequence
-                                                   : ls.fieldgoalSequence);
+                        if (delta >= 6)
+                            triggerAction(ls.touchdownActionType, ls.touchdownActionValue);
+                        else
+                            triggerAction(ls.fieldgoalActionType, ls.fieldgoalActionValue);
                     } else {
-                        triggerSequence(ls.scoreSequence);
+                        triggerAction(ls.scoreActionType, ls.scoreActionValue);
                     }
                 }
             }
@@ -763,7 +804,7 @@ private:
                 if (newMy > newOppo) {
                     LogInfo(VB_PLUGIN, "fpp-gameday: [%s] WIN! my=%d oppo=%d\n",
                             league.c_str(), newMy, newOppo);
-                    triggerSequence(ls.winSequence);
+                    triggerAction(ls.winActionType, ls.winActionValue);
                 }
                 return 600;
             }
