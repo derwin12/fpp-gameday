@@ -32,7 +32,7 @@ const LEAGUE_LABELS = {
 };
 const PERIOD_LABEL = {
     nfl:  'Q', ncaa: 'Q', afl: 'Q',
-    nhl:  'P', mlb:  'Inn'
+    nhl:  'P', mlb:  'Inning '
 };
 
 function formatDate(dateStr) {
