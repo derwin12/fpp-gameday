@@ -65,8 +65,9 @@ function getNCAATeams() {
 //----------------------------------------------------------------------
 function getSequences() {
     $data = fetchJson('http://127.0.0.1/api/sequence');
-    if (!$data || !isset($data['Sequences'])) return [];
-    $seqs = $data['Sequences'];
+    if (!$data) return [];
+    // FPP returns a plain array; older versions used {"Sequences":[...]}
+    $seqs = isset($data['Sequences']) ? $data['Sequences'] : (array_values($data) === $data ? $data : []);
     sort($seqs);
     return $seqs;
 }
