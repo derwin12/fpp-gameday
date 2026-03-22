@@ -1,7 +1,7 @@
 {
 	"repoName": "fpp-gameday",
 	"name": "GameDay",
-	"author": "Daryl (derwin12)",
+	"author": "DarylE (derwin12)",
 	"description": "Trigger FPP light sequences when your NFL, NHL, MLB, AFL or NCAA team scores or wins — live game tracking via ESPN.",
 	"homeURL": "https://github.com/derwin12/fpp-gameday",
 	"srcURL": "https://github.com/derwin12/fpp-gameday.git",
