@@ -25,6 +25,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <cstdio>
 #include <ctime>
 #include <map>
 #include <mutex>
@@ -35,34 +36,49 @@
 // cURL helpers
 // ---------------------------------------------------------------------------
 
-static size_t curlWriteCallback(void *contents, size_t size, size_t nmemb, std::string *out) {
-    out->append(static_cast<char *>(contents), size * nmemb);
-    return size * nmemb;
+static std::string shellEscape(const std::string &s) {
+    std::string out = "'";
+    for (char c : s) {
+        if (c == '\'') out += "'\\''";
+        else out += c;
+    }
+    out += "'";
+    return out;
 }
 
+// Direct libcurl requests (this function's old implementation, and
+// separately PHP's curl extension in content.php) get blocked by ESPN's
+// edge WAF with a 200 "Access Denied" HTML page instead of JSON -- no
+// curl-level error, so it fails silently unless the body is inspected.
+// A plain `curl` CLI request to the identical URL reliably succeeds
+// (verified against the WAF firsthand), so shell out to it instead of
+// using libcurl's easy API directly. See content.php's fetchJson for the
+// same fix and the diagnosis behind it.
 static std::string fetchURL(const std::string &url) {
-    CURL *curl = curl_easy_init();
-    if (!curl) return "";
-    std::string response;
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, ""); // auto-decompress gzip/deflate
-    // ESPN's edge WAF blocks the custom "fpp-gameday/x.y" UA with an "Access
-    // Denied" page instead of JSON (still HTTP 200). A browser-shaped UA
-    // avoids that; see content.php's fetchURL for the same fix.
-    curl_easy_setopt(curl, CURLOPT_USERAGENT,
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-    CURLcode res = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
-    if (res != CURLE_OK) {
-        LogWarn(VB_PLUGIN, "fpp-gameday: fetchURL failed for %s: %s\n",
-                url.c_str(), curl_easy_strerror(res));
+    std::string cmd = "curl -s --max-time 10 " + shellEscape(url) + " 2>/dev/null";
+    FILE *pipe = popen(cmd.c_str(), "r");
+    if (!pipe) {
+        LogWarn(VB_PLUGIN, "fpp-gameday: fetchURL popen failed for %s\n", url.c_str());
         return "";
+    }
+    std::string response;
+    char buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), pipe)) > 0)
+        response.append(buf, n);
+    int rc = pclose(pipe);
+    if (rc != 0) {
+        LogWarn(VB_PLUGIN, "fpp-gameday: fetchURL curl exited %d for %s\n", rc, url.c_str());
+        return "";
+    }
+    // Catches the WAF-block case (and any other non-JSON response) right at
+    // the source, regardless of which caller's parseJson() would otherwise
+    // fail silently.
+    size_t firstNonSpace = response.find_first_not_of(" \t\r\n");
+    if (firstNonSpace != std::string::npos &&
+        response[firstNonSpace] != '{' && response[firstNonSpace] != '[') {
+        LogWarn(VB_PLUGIN, "fpp-gameday: fetchURL got non-JSON response for %s (len=%zu, preview=%.80s)\n",
+                url.c_str(), response.size(), response.c_str());
     }
     return response;
 }
