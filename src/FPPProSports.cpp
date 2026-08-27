@@ -4,7 +4,6 @@
  */
 
 #include <fpp-pch.h>
-#include <httpserver.hpp>
 #include <curl/curl.h>
 
 #include "Plugin.h"
@@ -14,6 +13,15 @@
 #include "common.h"
 #include "settings.h"
 #include "fppversion_defines.h"
+
+// FPP_PLUGIN_API_VERSION 6 (FPP 10.0) replaced libhttpserver with Drogon and
+// removed the registerApis(httpserver::webserver*) virtuals; see Plugin.h.
+#if defined(FPP_PLUGIN_API_VERSION) && FPP_PLUGIN_API_VERSION >= 6
+#define GAMEDAY_USE_DROGON_HTTP 1
+#include "fpphttp.h"
+#else
+#include <httpserver.hpp>
+#endif
 
 #include <atomic>
 #include <condition_variable>
@@ -327,8 +335,11 @@ static void triggerAction(const std::string &type, const std::string &value) {
 static const std::vector<std::string> ALL_LEAGUES = {"nfl", "ncaa", "nhl", "mlb", "afl"};
 
 class FPPProSportsPlugin : public FPPPlugins::Plugin,
-                           public FPPPlugins::APIProviderPlugin,
-                           public httpserver::http_resource {
+                           public FPPPlugins::APIProviderPlugin
+#ifndef GAMEDAY_USE_DROGON_HTTP
+                           , public httpserver::http_resource
+#endif
+{
 public:
     FPPProSportsPlugin()
         : FPPPlugins::Plugin("fpp-gameday"),
@@ -351,6 +362,41 @@ public:
         stopThread();
     }
 
+#ifdef GAMEDAY_USE_DROGON_HTTP
+    void registerApis() override {
+        FPPPlugins::registerPluginApi(
+            "/ProSportsScoring",
+            [this](const HttpRequestPtr &req, HttpCallback &&callback) {
+                handleDrogonRequest(req, std::move(callback));
+            },
+            { drogon::Get, drogon::Post }, true /* family */);
+    }
+
+    void unregisterApis() override {
+        FPPPlugins::unregisterPluginApi("/ProSportsScoring");
+    }
+
+    void handleDrogonRequest(const HttpRequestPtr &req, HttpCallback &&callback) {
+        auto pieces = getPathPieces(req->path());
+        // pieces[0] = "ProSportsScoring", pieces[1] = action (matches the
+        // old libhttpserver get_path_pieces() convention -- req->path() is
+        // NOT prefixed with /api/plugin-apis/).
+        std::string action = (pieces.size() > 1) ? pieces[1] : "";
+
+        int code = 404;
+        std::string body = "{\"error\":\"Not found\"}";
+
+        if (req->method() == drogon::Get) {
+            handleGet(action, code, body);
+        } else if (req->method() == drogon::Post) {
+            std::string arg2 = (pieces.size() > 2) ? pieces[2] : "";
+            std::string arg3 = (pieces.size() > 3) ? pieces[3] : "";
+            handlePost(action, arg2, arg3, getRequestContent(req), code, body);
+        }
+
+        callback(makeStringResponse(body, code, "application/json"));
+    }
+#else
     void registerApis(httpserver::webserver *ws) override {
         ws->register_resource("/ProSportsScoring", this, true);
     }
@@ -369,16 +415,10 @@ public:
         // pieces[0] = "ProSportsScoring", pieces[1] = action
         std::string action = (pieces.size() > 1) ? pieces[1] : "";
 
-        if (action == "config") {
-            std::lock_guard<std::mutex> lock(m_stateMutex);
-            return jsonResp(buildConfigJson());
-        }
-        if (action == "status") {
-            std::lock_guard<std::mutex> lock(m_stateMutex);
-            return jsonResp(buildStatusJson());
-        }
-
-        return errResp(404, "Not found");
+        int code = 404;
+        std::string body = "{\"error\":\"Not found\"}";
+        handleGet(action, code, body);
+        return std::make_shared<httpserver::string_response>(body, code, "application/json");
     }
 
     // -------------------------------------------------------------------
@@ -389,11 +429,47 @@ public:
     render_POST(const httpserver::http_request &req) override {
         auto pieces = req.get_path_pieces();
         std::string action = (pieces.size() > 1) ? pieces[1] : "";
+        std::string arg2 = (pieces.size() > 2) ? pieces[2] : "";
+        std::string arg3 = (pieces.size() > 3) ? pieces[3] : "";
 
+        int code = 404;
+        std::string body = "{\"error\":\"Not found\"}";
+        handlePost(action, arg2, arg3, std::string(req.get_content()), code, body);
+        return std::make_shared<httpserver::string_response>(body, code, "application/json");
+    }
+#endif
+
+private:
+    // -------------------------------------------------------------------
+    // Shared HTTP action handlers (framework-agnostic)
+    // -------------------------------------------------------------------
+
+    // action: "config" | "status"
+    void handleGet(const std::string &action, int &code, std::string &body) {
+        if (action == "config") {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            code = 200;
+            body = jsonToString(buildConfigJson());
+            return;
+        }
+        if (action == "status") {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            code = 200;
+            body = jsonToString(buildStatusJson());
+            return;
+        }
+    }
+
+    // action: "config" (content = request body JSON) | "refresh" (league=arg2, index=arg3)
+    void handlePost(const std::string &action, const std::string &arg2, const std::string &arg3,
+                     const std::string &content, int &code, std::string &body) {
         if (action == "config") {
             Json::Value cfg;
-            if (!parseJson(std::string(req.get_content()), cfg))
-                return errResp(400, "Invalid JSON");
+            if (!parseJson(content, cfg)) {
+                code = 400;
+                body = "{\"error\":\"Invalid JSON\"}";
+                return;
+            }
 
             bool wasEnabled = m_enabled.load();
             applyConfig(cfg);
@@ -410,21 +486,29 @@ public:
                 m_cv.notify_all();
             }
 
-            return jsonResp(std::string("{\"status\":\"ok\"}"));
+            code = 200;
+            body = "{\"status\":\"ok\"}";
+            return;
         }
 
-        if (action == "refresh" && pieces.size() > 2) {
-            std::string league = pieces[2];
-            size_t idx = (pieces.size() > 3) ? std::stoul(pieces[3]) : 0;
-            if (m_leagues.find(league) == m_leagues.end())
-                return errResp(400, "Unknown league");
+        if (action == "refresh" && !arg2.empty()) {
+            std::string league = arg2;
+            size_t idx = !arg3.empty() ? std::stoul(arg3) : 0;
+            if (m_leagues.find(league) == m_leagues.end()) {
+                code = 400;
+                body = "{\"error\":\"Unknown league\"}";
+                return;
+            }
 
             LeagueState copy;
             {
                 std::lock_guard<std::mutex> lock(m_stateMutex);
                 auto &teams = m_leagues[league];
-                if (idx >= teams.size())
-                    return errResp(400, "Index out of range");
+                if (idx >= teams.size()) {
+                    code = 400;
+                    body = "{\"error\":\"Index out of range\"}";
+                    return;
+                }
                 copy = teams[idx];
             }
             bool ok = fetchTeamInfo(league, copy);
@@ -448,14 +532,11 @@ public:
             saveConfig();
             m_cv.notify_all();
 
-            std::string body = ok ? "{\"status\":\"ok\"}" : "{\"status\":\"error\"}";
-            return jsonResp(body);
+            code = 200;
+            body = ok ? "{\"status\":\"ok\"}" : "{\"status\":\"error\"}";
+            return;
         }
-
-        return errResp(404, "Not found");
     }
-
-private:
     // -------------------------------------------------------------------
     // Config persistence
     // -------------------------------------------------------------------
@@ -616,24 +697,6 @@ private:
 
             m_leagues[lg] = std::move(newTeams);
         }
-    }
-
-    // -------------------------------------------------------------------
-    // HTTP response helpers
-    // -------------------------------------------------------------------
-
-    static std::shared_ptr<httpserver::http_response> jsonResp(const Json::Value &val) {
-        return std::make_shared<httpserver::string_response>(
-            jsonToString(val), 200, "application/json");
-    }
-
-    static std::shared_ptr<httpserver::http_response> jsonResp(const std::string &json) {
-        return std::make_shared<httpserver::string_response>(json, 200, "application/json");
-    }
-
-    static std::shared_ptr<httpserver::http_response> errResp(int code, const std::string &msg) {
-        return std::make_shared<httpserver::string_response>(
-            "{\"error\":\"" + msg + "\"}", code, "application/json");
     }
 
     // -------------------------------------------------------------------
