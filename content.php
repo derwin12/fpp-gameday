@@ -29,7 +29,10 @@ function fetchJson($url) {
         }
     }
     if ($data === null) {
-        error_log("fpp-gameday: fetchJson json_decode failed for $url: " . json_last_error_msg());
+        $len = strlen($body);
+        $preview = bin2hex(substr($body, 0, 40));
+        error_log("fpp-gameday: fetchJson json_decode failed for $url: " . json_last_error_msg()
+            . " (body len=$len, first 40 bytes hex=$preview)");
     }
     return $data;
 }
