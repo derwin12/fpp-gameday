@@ -19,6 +19,15 @@ function fetchJson($url) {
         return null;
     }
     $data = json_decode($body, true);
+    if ($data === null && substr($body, 0, 2) === "\x1f\x8b") {
+        // CURLOPT_ENCODING didn't auto-decompress (libcurl built without the
+        // needed encoding support) -- the body is still raw gzip. Decode it
+        // ourselves before giving up.
+        $decoded = @gzdecode($body);
+        if ($decoded !== false) {
+            $data = json_decode($decoded, true);
+        }
+    }
     if ($data === null) {
         error_log("fpp-gameday: fetchJson json_decode failed for $url: " . json_last_error_msg());
     }
