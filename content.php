@@ -10,6 +10,7 @@ function fetchJson($url) {
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($ch, CURLOPT_USERAGENT, 'fpp-gameday/1.0');
+    curl_setopt($ch, CURLOPT_ENCODING, ''); // auto-decompress gzip/deflate (ESPN always gzips)
     $body = curl_exec($ch);
     $err  = curl_error($ch);
     curl_close($ch);
