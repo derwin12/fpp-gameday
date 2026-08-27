@@ -6,7 +6,12 @@ all: libfpp-gameday.$(SHLIB_EXT)
 debug: all
 
 OBJECTS_fpp_gameday_so += src/FPPProSports.o
-LIBS_fpp_gameday_so += -L${SRCDIR} -lfpp -ljsoncpp -lhttpserver -lcurl
+LIBS_fpp_gameday_so += -L${SRCDIR} -lfpp -ljsoncpp -lcurl
+# fpphttp.h only exists on FPP10+ (Drogon-based plugin HTTP API, which lives
+# in libfpp itself); FPP8/9 need the separate libhttpserver runtime library.
+ifeq ($(wildcard ${SRCDIR}/fpphttp.h),)
+LIBS_fpp_gameday_so += -lhttpserver
+endif
 CXXFLAGS_src/FPPProSports.o += -I${SRCDIR}
 
 %.o: %.cpp Makefile
