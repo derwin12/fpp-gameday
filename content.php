@@ -14,8 +14,15 @@ function fetchJson($url) {
     $body = curl_exec($ch);
     $err  = curl_error($ch);
     curl_close($ch);
-    if ($err || $body === false) return null;
-    return json_decode($body, true);
+    if ($err || $body === false) {
+        error_log("fpp-gameday: fetchJson curl error for $url: $err");
+        return null;
+    }
+    $data = json_decode($body, true);
+    if ($data === null) {
+        error_log("fpp-gameday: fetchJson json_decode failed for $url: " . json_last_error_msg());
+    }
+    return $data;
 }
 
 function getTeams($sport, $league) {
