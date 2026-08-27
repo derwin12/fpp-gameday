@@ -52,7 +52,11 @@ static std::string fetchURL(const std::string &url) {
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, ""); // auto-decompress gzip/deflate
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "fpp-gameday/2.0");
+    // ESPN's edge WAF blocks the custom "fpp-gameday/x.y" UA with an "Access
+    // Denied" page instead of JSON (still HTTP 200). A browser-shaped UA
+    // avoids that; see content.php's fetchURL for the same fix.
+    curl_easy_setopt(curl, CURLOPT_USERAGENT,
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
     if (res != CURLE_OK) {

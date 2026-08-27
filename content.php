@@ -9,7 +9,10 @@ function fetchJson($url) {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-    curl_setopt($ch, CURLOPT_USERAGENT, 'fpp-gameday/1.0');
+    // ESPN's edge WAF blocks the custom "fpp-gameday/x.y" UA with an "Access
+    // Denied" page (returns 200, so curl reports no error -- json_decode just
+    // fails on the HTML body). A browser-shaped UA avoids that.
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
     curl_setopt($ch, CURLOPT_ENCODING, ''); // auto-decompress gzip/deflate (ESPN always gzips)
     $body = curl_exec($ch);
     $err  = curl_error($ch);
