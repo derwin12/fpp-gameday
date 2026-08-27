@@ -31,45 +31,66 @@
 #include <string>
 #include <thread>
 
+#include <fcntl.h>
+#include <unistd.h>
+
 // ---------------------------------------------------------------------------
 // cURL helpers
 // ---------------------------------------------------------------------------
 
-static size_t curlWriteCallback(void *contents, size_t size, size_t nmemb, std::string *out) {
-    out->append(static_cast<char *>(contents), size * nmemb);
-    return size * nmemb;
-}
-
-// popen()/pclose() do not compose safely inside fppd: fppd manages its own
-// child processes and SIGCHLD handling, which races with pclose()'s internal
-// waitpid() and makes it return -1 unconditionally, discarding a response
-// even when curl actually succeeded. (Tried and measured on FPP10 -- every
-// single call came back rc=-1.) Stick with libcurl's easy API.
+// Neither libcurl's easy API (forcing HTTP/1.1 included) nor a browser UA
+// avoided ESPN's edge WAF block -- both got the identical ~442-444 byte
+// "Access Denied" page libcurl always got here. Only the system `curl`
+// binary reliably gets a real response on this box, so use it: fork+exec
+// it directly and read its stdout via a pipe until EOF.
+//
+// Deliberately NOT waitpid()'d: popen()/pclose() were tried first and
+// pclose() returned -1 on every single call, which is what happens when
+// something else has already reaped the child before pclose() gets to
+// wait on it -- i.e. fppd (or something in its process tree) already reaps
+// arbitrary children. That means letting this child's exit status go
+// unclaimed here is not a zombie leak, it's just not our job to collect it.
 static std::string fetchURL(const std::string &url) {
-    CURL *curl = curl_easy_init();
-    if (!curl) return "";
+    int pipefd[2];
+    if (pipe(pipefd) != 0) {
+        LogWarn(VB_PLUGIN, "fpp-gameday: fetchURL pipe() failed for %s\n", url.c_str());
+        return "";
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        LogWarn(VB_PLUGIN, "fpp-gameday: fetchURL fork() failed for %s\n", url.c_str());
+        return "";
+    }
+
+    if (pid == 0) {
+        // Child: stdout -> pipe write end, stderr -> /dev/null.
+        close(pipefd[0]);
+        dup2(pipefd[1], STDOUT_FILENO);
+        close(pipefd[1]);
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+        execlp("curl", "curl", "-s", "--max-time", "10", url.c_str(), (char *)nullptr);
+        _exit(127); // exec failed
+    }
+
+    // Parent: read until EOF (the child closing its stdout, whether by
+    // exiting or finishing the transfer, is what ends this).
+    close(pipefd[1]);
     std::string response;
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, ""); // auto-decompress gzip/deflate
-    curl_easy_setopt(curl, CURLOPT_USERAGENT,
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-    // libcurl's easy API defaults to negotiating HTTP/2 over TLS when the
-    // server offers it via ALPN; ESPN's edge WAF blocked that shape of
-    // request with a 200 "Access Denied" HTML page (no curl-level error) on
-    // FPP10 while a plain `curl` CLI request to the identical URL succeeded.
-    // Forcing HTTP/1.1 matches the CLI's negotiation and avoids the block.
-    curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
-    CURLcode res = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
-    if (res != CURLE_OK) {
-        LogWarn(VB_PLUGIN, "fpp-gameday: fetchURL failed for %s: %s\n",
-                url.c_str(), curl_easy_strerror(res));
+    char buf[4096];
+    ssize_t n;
+    while ((n = read(pipefd[0], buf, sizeof(buf))) > 0)
+        response.append(buf, static_cast<size_t>(n));
+    close(pipefd[0]);
+
+    if (response.empty()) {
+        LogWarn(VB_PLUGIN, "fpp-gameday: fetchURL got empty response for %s\n", url.c_str());
         return "";
     }
     // Catches a WAF-block page (or any other non-JSON response) right at the
