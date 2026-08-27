@@ -5,32 +5,19 @@
  */
 
 function fetchJson($url) {
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-    // ESPN's edge WAF blocks the custom "fpp-gameday/x.y" UA with an "Access
-    // Denied" page (returns 200, so curl reports no error -- json_decode just
-    // fails on the HTML body). A browser-shaped UA avoids that.
-    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-    curl_setopt($ch, CURLOPT_ENCODING, ''); // auto-decompress gzip/deflate (ESPN always gzips)
-    $body = curl_exec($ch);
-    $err  = curl_error($ch);
-    curl_close($ch);
-    if ($err || $body === false) {
-        error_log("fpp-gameday: fetchJson curl error for $url: $err");
+    // PHP's bundled curl extension gets blocked by ESPN's edge WAF with a
+    // 200 "Access Denied" HTML page (independent of User-Agent -- almost
+    // certainly a TLS/HTTP2 handshake fingerprint difference from the
+    // system curl binary, which reliably gets a clean response on this
+    // same box). Shell out to the system curl instead; FPP's own PHP does
+    // the same thing elsewhere (e.g. shell_exec('nproc') in plugins.php).
+    $cmd = 'curl -s --max-time 10 ' . escapeshellarg($url) . ' 2>&1';
+    $body = shell_exec($cmd);
+    if ($body === null || $body === '') {
+        error_log("fpp-gameday: fetchJson curl (shell) returned nothing for $url");
         return null;
     }
     $data = json_decode($body, true);
-    if ($data === null && substr($body, 0, 2) === "\x1f\x8b") {
-        // CURLOPT_ENCODING didn't auto-decompress (libcurl built without the
-        // needed encoding support) -- the body is still raw gzip. Decode it
-        // ourselves before giving up.
-        $decoded = @gzdecode($body);
-        if ($decoded !== false) {
-            $data = json_decode($decoded, true);
-        }
-    }
     if ($data === null) {
         $len = strlen($body);
         $preview = bin2hex(substr($body, 0, 40));
