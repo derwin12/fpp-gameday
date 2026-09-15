@@ -6,7 +6,36 @@
 	"homeURL": "https://github.com/derwin12/fpp-gameday",
 	"srcURL": "https://github.com/derwin12/fpp-gameday.git",
 	"bugURL": "https://github.com/derwin12/fpp-gameday/issues",
+	"iconURL": "https://raw.githubusercontent.com/derwin12/fpp-gameday/main/icon.png",
 	"allowUpdates": 1,
+	"privacy": {
+		"summary": "Asks ESPN's public score API about the teams you pick, and loads their logos in your browser. Keeps nothing but your own settings.",
+		"sends": [
+			{
+				"to": "site.api.espn.com",
+				"what": "the league, team and game IDs you chose to track",
+				"why": "to look up your team's schedule and live score",
+				"alwaysOn": false
+			},
+			{
+				"to": "a.espncdn.com",
+				"what": "your browser's address, when a plugin page shows a team logo",
+				"why": "to display the team logo on the setup and status pages",
+				"alwaysOn": false
+			}
+		],
+		"collects": [],
+		"sensors": [],
+		"remoteAccess": "none",
+		"systemChanges": [
+			{
+				"kind": "core-settings",
+				"what": "adds a.espncdn.com and site.api.espn.com to FPP's Apache Content-Security-Policy so logos and score lookups load"
+			}
+		],
+		"closedCode": false,
+		"other": "none"
+	},
 	"versions": [
 		{
 			"minFPPVersion": "8.0",
