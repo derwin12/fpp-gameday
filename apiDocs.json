@@ -1,0 +1,68 @@
+{
+    "/api/plugin-apis/ProSportsScoring/config": {
+        "get": {
+            "tags": ["plugin: fpp-gameday"],
+            "summary": "Get GameDay configuration",
+            "description": "Returns the plugin's enabled flag and, for each supported league (nfl, ncaa, nhl, mlb), the array of tracked teams with their IDs, names, logos, next event and configured sequences.",
+            "responses": {
+                "200": {
+                    "description": "Current configuration",
+                    "content": { "application/json": { "schema": { "type": "object" } } }
+                }
+            }
+        },
+        "post": {
+            "tags": ["plugin: fpp-gameday"],
+            "summary": "Save GameDay configuration",
+            "description": "Replaces the stored configuration, persists it to plugin.fpp-gameday.json and starts, stops or wakes the polling threads to match. Sequence names are given without the .fseq extension.",
+            "requestBody": {
+                "required": true,
+                "content": { "application/json": { "schema": { "type": "object" } } }
+            },
+            "responses": {
+                "200": { "description": "Saved" },
+                "400": { "description": "Invalid JSON in the request body" }
+            }
+        }
+    },
+    "/api/plugin-apis/ProSportsScoring/status": {
+        "get": {
+            "tags": ["plugin: fpp-gameday"],
+            "summary": "Get live GameDay status",
+            "description": "Returns the current game state for every tracked team: opponent, scores, period, clock and game status (pre, in, post). Polled by the GameDay Status page.",
+            "responses": {
+                "200": {
+                    "description": "Live status for all tracked teams",
+                    "content": { "application/json": { "schema": { "type": "object" } } }
+                }
+            }
+        }
+    },
+    "/api/plugin-apis/ProSportsScoring/refresh/{league}/{index}": {
+        "post": {
+            "tags": ["plugin: fpp-gameday"],
+            "summary": "Force a refresh for one tracked team",
+            "description": "Immediately re-queries ESPN for the given team instead of waiting for the next poll interval, and updates the stored state.",
+            "parameters": [
+                {
+                    "name": "league",
+                    "in": "path",
+                    "required": true,
+                    "description": "League key",
+                    "schema": { "type": "string", "enum": ["nfl", "ncaa", "nhl", "mlb"] }
+                },
+                {
+                    "name": "index",
+                    "in": "path",
+                    "required": true,
+                    "description": "Zero-based index of the team within that league's tracked list",
+                    "schema": { "type": "integer", "minimum": 0 }
+                }
+            ],
+            "responses": {
+                "200": { "description": "Refreshed" },
+                "400": { "description": "Unknown league or index out of range" }
+            }
+        }
+    }
+}
